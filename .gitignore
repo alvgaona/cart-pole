@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Simulink
+slprj/
+*.asv
+
+# MATLAB
+*.mat
+
