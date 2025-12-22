@@ -1,4 +1,21 @@
-function [t, y, x_hat, sigma] = cart_pole_l1_solver(f, params, x0, sim_time)
+function [t, y, x_hat, sigma] = cart_pole_l1_solver(f, params, x0, sim_time, r)
+    % CART_POLE_L1_SOLVER L1 adaptive control solver for cart-pole systems
+    %
+    % Inputs:
+    %   f        - Dynamics function handle
+    %   params   - Parameter structure
+    %   x0       - Initial state
+    %   sim_time - Simulation time
+    %   r        - Reference function handle r(t) (default: @(t) 0)
+
+    arguments
+        f
+        params
+        x0
+        sim_time
+        r = @(t) 0
+    end
+
     % Initialize
     x = x0;                       % Plant state
     x_hat = x0;                   % Predictor state
@@ -53,16 +70,18 @@ function [t, y, x_hat, sigma] = cart_pole_l1_solver(f, params, x0, sim_time)
         sigma_hat_m = sigma_update(1);
         sigma_hat_um = sigma_update(2:end);
 
-        % The reference is stabilization so r=0
-        % u_raw = k_g * r - sigma_hat_m (ignoring unmatched uncertainty);
-        u_raw = params.k_g * 0 - sigma_hat_m;
-        
+        % Adaptive control law (feedforward + uncertainty compensation)
+        u_ad_raw = params.k_g * r(t(i)) - sigma_hat_m;
+
         % Discrete low-pass filter
         a = exp(params.Ts * params.wf);
-        u_filt = (1 - a) * u_filt + a * u_raw;
+        u_filt = (1 - a) * u_filt + a * u_ad_raw;
+
+        % Total control to plant (baseline feedback + filtered adaptive)
+        u_total = -params.K_lqr * x_hat + u_filt;
 
         % Solve plant dynamics using RK4
-        f_plant = @(t_val, x_val) f(t_val, x_val, params, @(t,x) u_filt);
+        f_plant = @(t_val, x_val) f(t_val, x_val, params, @(t,x) u_total);
         x = rk4_step(f_plant, t(i), x, params.Ts);
 
         % Predict the state using RK4
