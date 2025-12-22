@@ -152,25 +152,58 @@ params = struct( ...
 );
 
 params_true = params;
+
+% Mass uncertainty
 params_true.m_nominal = m;
 params_true.m_step_time = 2.0;
-params_true.m_step_value = 0.3;
+params_true.m_step_value = 0.3;  % m: 0.2 → 0.3 kg (+50%)
+
+% Friction uncertainty
+params_true.b_nominal = b;
+params_true.b_step_time = 5.0;
+params_true.b_step_value = 0.2;  % b: 0.1 → 0.2 N·s/m (+100%)
+
+% Length uncertainty
+params_true.l_nominal = l;
+params_true.l_step_time = 8.0;
+params_true.l_step_value = 0.7;  % l: 0.6 → 0.7 m (+17%)
 
 %% Simulation parameters
-initial_state = [0.1; 0.2; 0; 0];
+initial_state = [0; 0.6; 0; 0];
 sim_time = 50;
 
-% Reference signal: step function for cart position
+% Step function
 r_step_time = 3.0;  % Step occurs at t=3s
 r_amplitude = 0.5;  % Step to 0.5m
 r = @(t) (t >= r_step_time) * r_amplitude;
+
+%% Disturbance options (returns [F_cart; tau_pole])
+
+% No disturbance (default)
+% dist = @(t, x) [0; 0];
+
+% Impulse force on cart (5N for 0.1s at t=10s)
+% dist = @(t, x) [(t >= 10.0 && t < 10.1) * 5.0; 0];
+
+% Step force on cart (2N starting at t=7s)
+% dist = @(t, x) [(t >= 7.0) * 2.0; 0];
+
+% Sinusoidal force on cart (1N at 1Hz)
+% dist = @(t, x) [sin(2*pi*1*t); 0];
+
+% Impulse torque on pole (0.5 N·m for 0.1s at t=12s)
+% dist = @(t, x) [0; (t >= 12.0 && t < 12.1) * 0.5];
+
+% Combined: step force + sinusoidal torque
+dist = @(t, x) [(t >= 7.0) * 2.0; 0.01*sin(2*pi*0.5*t)];
 
 [t, state, s_hat, sigma] = cart_pole_l1_solver(...
   @single_cart_pole_dyn, ...
   params_true, ...
   initial_state, ...
   sim_time, ...
-  r);
+  r, ...
+  dist);
 
 %% Plot results
 x = state(:,1); theta = state(:,2); dx = state(:,3); dtheta = state(:,4);

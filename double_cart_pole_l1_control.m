@@ -167,25 +167,66 @@ params = struct( ...
 );
 
 params_true = params;
+
+% Mass uncertainties
 params_true.m1_nominal = m1;
 params_true.m1_step_time = 2.0;
-params_true.m1_step_value = 0.3;  % m1 increases 50% (multiplicative factor)
+params_true.m1_step_value = 0.3;  % m1: 0.2 → 0.3 kg (+50%)
+
+params_true.m2_nominal = m2;
+params_true.m2_step_time = 8.0;
+params_true.m2_step_value = 0.15;  % m2: 0.2 → 0.15 kg (-25%)
+
+% Length uncertainties
+params_true.l1_nominal = l1;
+params_true.l1_step_time = 11.0;
+params_true.l1_step_value = 0.7;  % l1: 0.6 → 0.7 m (+17%)
+
+params_true.l2_nominal = l2;
+params_true.l2_step_time = 14.0;
+params_true.l2_step_value = 0.5;  % l2: 0.6 → 0.5 m (-17%)
+
+% Friction uncertainty
+params_true.b_nominal = b;
+params_true.b_step_time = 5.0;
+params_true.b_step_value = 0.2;  % b: 0.1 → 0.2 N·s/m (+100%)
 
 %% Simulation parameters
-initial_state = [0; 0.1; -0.1; 0; 0; 0];
-sim_time = 50;  % Reduced from 100 for easier comparison
+initial_state = [0; 0.2; -0.15; 0; 0; 0];
+sim_time = 20;  % Extended to 20s to see all parameter changes
 
-% Reference signal: step function for cart position
+% Step function
 r_step_time = 3.0;  % Step occurs at t=3s
 r_amplitude = 0.5;  % Step to 0.5m
 r = @(t) (t >= r_step_time) * r_amplitude;
+
+%% Disturbance options (returns [F_cart; tau_pole1; tau_pole2])
+
+% No disturbance (default)
+% dist = @(t, x) [0; 0; 0];
+
+% Impulse force on cart (5N for 0.1s at t=10s)
+dist = @(t, x) [(t >= 10.0 && t < 10.1) * 5.0; 0; 0];
+
+% Step force on cart (2N starting at t=7s)
+% dist = @(t, x) [(t >= 7.0) * 2.0; 0; 0];
+
+% Sinusoidal force on cart (1N at 1Hz)
+% dist = @(t, x) [sin(2*pi*1*t); 0; 0];
+
+% Torques on both poles (unmatched disturbances)
+% dist = @(t, x) [0; 0.2*sin(2*pi*0.5*t); 0.2*sin(2*pi*0.7*t)];
+
+% Combined: step force + torque on pole1
+% dist = @(t, x) [(t >= 7.0) * 1.0; (t >= 12.0 && t < 12.1) * 0.5; 0];
 
 [t, state, s_hat, sigma] = cart_pole_l1_solver(...
   @double_cart_pole_dyn, ...
   params_true, ...
   initial_state, ...
   sim_time, ...
-  r);
+  r, ...
+  dist);
 
 %% Plot results
 x = state(:,1); theta1 = state(:,2); theta2 = state(:,3);

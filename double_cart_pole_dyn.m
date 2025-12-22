@@ -1,15 +1,25 @@
-function dstate = double_cart_pole_dyn(t, state, params, control_func)
+function dstate = double_cart_pole_dyn(t, state, params, control_func, dist_func)
 % DOUBLE_CART_POLE DYN Computes the dynamics of double pendulum cart pole
 %
 % Inputs:
 %   t - current time
-%   state - state vector [x; theta; psi; dx; dtheta; dpsi]
-%           x: forward position, theta: pitch angle, psi: yaw angle
+%   state - state vector [x; theta1; theta2; dx; dtheta1; dtheta2]
 %   params - structure containing robot parameters
 %   control_func - function handle for control input: u = control_func(t, state)
+%   dist_func - function handle for disturbances: [F_cart; tau_pole1; tau_pole2] = dist_func(t, state)
+%               F_cart: force on cart [N], tau_pole1/2: torques on poles [N·m]
+%               (default: @(t,x) [0; 0; 0])
 %
 % Output:
 %   dstate - time derivative of state vector
+
+arguments
+    t
+    state
+    params
+    control_func
+    dist_func = @(t, x) [0; 0; 0]
+end
 
 % Extract state variables
 x = state(1);
@@ -77,12 +87,18 @@ G = [0; -(m1+m2)*l1*g*sin(theta1); -m2*l2*g*sin(theta2)];
 % Get control input
 u = control_func(t, state);
 
+% Get disturbances: [F_cart; tau_pole1; tau_pole2]
+d = dist_func(t, state);
+F_cart = d(1);      % Force on cart [N]
+tau_pole1 = d(2);   % Torque on pole 1 [N·m]
+tau_pole2 = d(3);   % Torque on pole 2 [N·m]
+
 % Velocity vector
 qdot = [dx; dtheta1; dtheta2];
 
-% Equation of motion: M*qddot + C*qdot + D*qdot + G = B*u
-% Solve for qddot: qddot = M\(B*u - C*qdot - D*qdot - G)
-qddot = M \ (B*u - C*qdot - D*qdot - G);
+% Equation of motion: M*qddot + C*qdot + D*qdot + G = B*u + [F_cart; tau_pole1; tau_pole2]
+% Solve for qddot
+qddot = M \ (B*u + [F_cart; tau_pole1; tau_pole2] - C*qdot - D*qdot - G);
 
 % Construct derivative of state vector
 dstate = [
