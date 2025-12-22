@@ -1,12 +1,12 @@
 clear; clc; close all;
 
 %% Parameters of the model
-M = 1;      % Mass of the cart [kg]
-m1 = 1;     % Mass of the first pole [kg]
-m2 = 1;     % Mass of the second pole [kg]
-l1 = 1;     % Length of the first pole [m]
-l2 = 1;     % Length of the second pole [m]
-b = 0.01;   % Friction coefficiente of the cart
+M = 2;      % Mass of the cart [kg]
+m1 = 0.2;   % Mass of the first pole [kg]
+m2 = 0.2;   % Mass of the second pole [kg]
+l1 = 0.6;   % Length of the first pole [m]
+l2 = 0.6;   % Length of the second pole [m]
+b = 0.1;    % Friction coefficient of the cart [N·s/m]
 g = 9.81;   % Gravitational acceleration [m/s^2]
 
 fprintf("=============== Parameters ===============\n")
@@ -97,3 +97,203 @@ unstable_modes = sum(real(open_eigval) > 0);
 fprintf("Number of unstable modes: %d\n", unstable_modes);
 fprintf("=================================================\n")
 
+%% Design LQR Controller
+
+% State weights Q (6x6)
+% Order: [x, θ₁, θ₂, dx, dθ₁, dθ₂]
+Q = diag([
+    1, ...    % x position
+    100, ...  % θ₁
+    100, ...  % θ₂
+    1, ...    % dx
+    10, ...   % dθ₁
+    0.1       % dθ₂
+]);
+
+% Input effort weights R (1x1)
+R = diag([0.1]);
+
+fprintf('\n===== Designing LQR Controller ====\n');
+fprintf('State weights Q (diagonal):\n');
+disp(diag(Q)');
+fprintf('Control weights R (diagonal):\n');
+disp(diag(R)');
+
+% Compute LQR gain
+[K_lqr, S, poles_closed] = lqr(A, B_ss, Q, R);
+
+fprintf('\nLQR gain matrix K (1x6):\n');
+disp(K_lqr);
+
+fprintf('\nClosed-loop poles:\n');
+disp(poles_closed);
+
+if all(real(poles_closed) < 0)
+  fprintf("All closed-loop poles have negative real parts.\n\n");
+else
+  fprintf("Some closed-loop poles have positive real part.\n\n")
+end
+
+%% Pack parameters for simulation
+params = struct("M", M, "m1", m1, ...
+  "m2", m2, ...
+  "l1", l1, ...
+  "l2", l2, ...
+  "b", b, ...
+  "g", g, ...
+  "K_lqr", K_lqr);
+
+%% Initial conditions
+x0 = 0.1;             % Initial forward position [m]
+theta10 = 0.1;      % Initial angle for pole 1 [rad]
+theta20 = -0.1;     % Initial angle for pole 2 [rad]
+dx0 = 0;            % Initial forward velocity [m/s]
+dtheta10 = 0;       % Initial angular velocity for pole 1 [rad/s]
+dtheta20 = 0;       % Initial angular velocity for pole 2 [rad/s]
+
+initial_state = [x0; theta10; theta20; dx0; dtheta10; dtheta20];
+
+fprintf("================= Initial Conditions ==================\n")
+fprintf(" Initial cart position: %.2f m\n", x0);
+fprintf(" Initial pole 1 angle: %.2f deg\n", rad2deg(theta10));
+fprintf(" Initial pole 2 angle: %.2f deg\n", rad2deg(theta20));
+fprintf(" Initial cart velocity: %.2f m/s\n", dx0);
+fprintf(" Initial pole 1 angular velocity: %.2f deg/s\n", rad2deg(dtheta10));
+fprintf(" Initial pole 2 angular velocity: %.2f deg/s\n", rad2deg(dtheta20));
+fprintf("=======================================================\n\n")
+
+%% Simulation parameters
+sim_time = 100;
+tspan = [0 sim_time];
+
+%% LQR control law
+% u = -K * x
+control_func_lqr = @(t, state) -params.K_lqr * state;
+
+%% Solve ODE with LQR control
+fprintf("Running control simulation\n\n")
+options = odeset("RelTol", 1e-6, "AbsTol", 1e-8);
+
+% ODE dynamics function
+f = @(t, y) double_cart_pole_dyn(t, y, params, control_func_lqr);
+
+[t, state] = ode45(f, tspan, initial_state, options);
+
+fprintf("Simulation completed successfully!\\n\\n")
+
+%% Extract states
+x = state(:, 1);
+theta1 = state(:, 2);
+theta2 = state(:, 3);
+dx = state(:, 4);
+dtheta1 = state(:, 5);
+dtheta2 = state(:, 6);
+
+% Compute control inputs over time
+u = zeros(length(t), 1);
+for i = 1:length(t)
+  u(i) = control_func_lqr(t(i), state(i,:)');
+end
+
+% Compute state norm (distance from equilibrium)
+state_norm = vecnorm(state, 2, 2);
+
+%% Plot results
+figure('Position', [100, 100, 1400, 900], 'Color', 'w');
+set(0, 'DefaultTextInterpreter', 'latex');
+set(0, 'DefaultLegendInterpreter', 'latex');
+
+subplot(3, 3, 1);
+plot(t, x, 'LineWidth', 2);
+xlabel('$t$ [s]', 'FontSize', 14);
+ylabel('$x$ [m]', 'FontSize', 14);
+title('Cart Position', 'FontSize', 14);
+grid on;
+set(gca, 'FontSize', 12);
+box off;
+
+subplot(3, 3, 2);
+plot(t, rad2deg(theta1), 'LineWidth', 2);
+hold on;
+yline(0, 'k:', 'LineWidth', 1);
+hold off;
+xlabel('$t$ [s]', 'FontSize', 14);
+ylabel('$\theta_1$ [$^\circ$]', 'FontSize', 14);
+title('Pole 1 Angle', 'FontSize', 14);
+grid on;
+set(gca, 'FontSize', 12);
+box off;
+
+subplot(3, 3, 3);
+plot(t, rad2deg(theta2), 'LineWidth', 2);
+hold on;
+yline(0, 'k:', 'LineWidth', 1);
+hold off;
+xlabel('$t$ [s]', 'FontSize', 14);
+ylabel('$\theta_2$ [$^\circ$]', 'FontSize', 14);
+title('Pole 2 Angle', 'FontSize', 14);
+grid on;
+set(gca, 'FontSize', 12);
+box off;
+
+subplot(3, 3, 4);
+plot(t, dx, 'LineWidth', 2);
+xlabel('$t$ [s]', 'FontSize', 14);
+ylabel('$\dot{x}$ [m/s]', 'FontSize', 14);
+title('Cart Velocity', 'FontSize', 14);
+grid on;
+set(gca, 'FontSize', 12);
+box off;
+
+subplot(3, 3, 5);
+plot(t, rad2deg(dtheta1), 'LineWidth', 2);
+xlabel('$t$ [s]', 'FontSize', 14);
+ylabel('$\dot{\theta}_1$ [$^\circ$/s]', 'FontSize', 14);
+title('Pole 1 Angular Velocity', 'FontSize', 14);
+grid on;
+set(gca, 'FontSize', 12);
+box off;
+
+subplot(3, 3, 6);
+plot(t, rad2deg(dtheta2), 'LineWidth', 2);
+xlabel('$t$ [s]', 'FontSize', 14);
+ylabel('$\dot{\theta}_2$ [$^\circ$/s]', 'FontSize', 14);
+title('Pole 2 Angular Velocity', 'FontSize', 14);
+grid on;
+set(gca, 'FontSize', 12);
+box off;
+
+subplot(3, 3, 7);
+plot(t, u, 'b-', 'LineWidth', 2);
+xlabel('$t$ [s]', 'FontSize', 14);
+ylabel('Force [N]', 'FontSize', 14);
+title('Control Input', 'FontSize', 14);
+grid on;
+set(gca, 'FontSize', 12);
+box off;
+
+subplot(3, 3, 8);
+plot(t, rad2deg(theta1), 'b-', 'LineWidth', 1.5, 'DisplayName', '$\theta_1$');
+hold on;
+plot(t, rad2deg(theta2), 'r-', 'LineWidth', 1.5, 'DisplayName', '$\theta_2$');
+yline(0, 'k:', 'LineWidth', 1, 'HandleVisibility', 'off');
+hold off;
+xlabel('$t$ [s]', 'FontSize', 14);
+ylabel('Angle [$^\circ$]', 'FontSize', 14);
+title('Both Pole Angles', 'FontSize', 14);
+legend('Location', 'best', 'FontSize', 12);
+grid on;
+set(gca, 'FontSize', 12);
+box off;
+
+subplot(3, 3, 9);
+% State norm (distance from equilibrium)
+semilogy(t, state_norm, 'b-', 'LineWidth', 2);
+xlabel('$t$ [s]', 'FontSize', 14);
+ylabel('$||x||_2$', 'FontSize', 14);
+title('Distance from Equilibrium', 'FontSize', 14);
+grid on;
+set(gca, 'FontSize', 12);
+box off;
+
+sgtitle('LQR-Controlled Double Inverted Pendulum on Cart', 'FontSize', 18, 'FontWeight', 'bold');
