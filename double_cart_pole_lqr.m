@@ -134,6 +134,14 @@ else
   fprintf("Some closed-loop poles have positive real part.\n\n")
 end
 
+%% Feedforward gain for reference tracking
+% Compute DC gain from control input to cart position (first state)
+Am = A - B_ss * K_lqr;
+C_pos = [1 0 0 0 0 0];  % Select cart position
+k_g = -1 / (C_pos * pinv(Am) * B_ss);
+
+fprintf('Feedforward gain k_g: %.4f\n\n', k_g);
+
 %% Pack parameters for simulation
 params = struct("M", M, "m1", m1, ...
   "m2", m2, ...
@@ -146,7 +154,7 @@ params = struct("M", M, "m1", m1, ...
 %% Initial conditions
 x0 = 0.1;             % Initial forward position [m]
 theta10 = 0.1;      % Initial angle for pole 1 [rad]
-theta20 = -0.1;     % Initial angle for pole 2 [rad]
+theta20 = -0.3;     % Initial angle for pole 2 [rad]
 dx0 = 0;            % Initial forward velocity [m/s]
 dtheta10 = 0;       % Initial angular velocity for pole 1 [rad/s]
 dtheta20 = 0;       % Initial angular velocity for pole 2 [rad/s]
@@ -166,9 +174,16 @@ fprintf("=======================================================\n\n")
 sim_time = 100;
 tspan = [0 sim_time];
 
-%% LQR control law
-% u = -K * x
-control_func_lqr = @(t, state) -params.K_lqr * state;
+%% Reference signal options:
+
+% Step function
+r_step_time = 3.0;  % Step occurs at t=3s
+r_amplitude = 0.5;  % Step to 0.5m
+r = @(t) (t >= r_step_time) * r_amplitude;
+
+%% LQR control law with reference tracking
+% u = -K * x + k_g * r(t)
+control_func_lqr = @(t, state) -params.K_lqr * state + k_g * r(t);
 
 %% Solve ODE with LQR control
 fprintf("Running control simulation\n\n")
@@ -204,10 +219,15 @@ set(0, 'DefaultTextInterpreter', 'latex');
 set(0, 'DefaultLegendInterpreter', 'latex');
 
 subplot(3, 3, 1);
-plot(t, x, 'LineWidth', 2);
+r_vec = arrayfun(r, t);
+plot(t, x, 'b-', 'LineWidth', 2, 'DisplayName', 'Plant');
+hold on;
+plot(t, r_vec, 'k:', 'LineWidth', 1.5, 'DisplayName', 'Reference');
+hold off;
 xlabel('$t$ [s]', 'FontSize', 14);
 ylabel('$x$ [m]', 'FontSize', 14);
 title('Cart Position', 'FontSize', 14);
+legend('Location', 'best', 'FontSize', 10);
 grid on;
 set(gca, 'FontSize', 12);
 box off;
