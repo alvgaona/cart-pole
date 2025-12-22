@@ -143,8 +143,9 @@ phi = pinv(Am) * (expm(Am*Ts) - eye(6)) * [Bm, Bum];
 gamma = -pinv(phi) * expm(Am*Ts);
 
 %% Feedforward gain for reference tracking
-C_pos = [1 0 0 0 0 0];
-k_g = -1/(C_pos * pinv(Am') * Bm);
+% Compute DC gain from control input to cart position (first state)
+C_pos = [1 0 0 0 0 0];  % Select cart position
+k_g = -1 / (C_pos * pinv(Am) * Bm);
 
 % Store parameters in a struct
 params = struct( ...
@@ -158,6 +159,7 @@ params = struct( ...
   'Am', Am, ...
   'Bm', Bm, ...
   'Bum', Bum, ...
+  'K_lqr', K_lqr, ...
   'wf', 20, ...
   'Ts', Ts, ...
   'gamma', gamma, ...
@@ -173,11 +175,17 @@ params_true.m1_step_value = 0.3;  % m1 increases 50% (multiplicative factor)
 initial_state = [0; 0.1; -0.1; 0; 0; 0];
 sim_time = 50;  % Reduced from 100 for easier comparison
 
+% Reference signal: step function for cart position
+r_step_time = 3.0;  % Step occurs at t=3s
+r_amplitude = 0.5;  % Step to 0.5m
+r = @(t) (t >= r_step_time) * r_amplitude;
+
 [t, state, s_hat, sigma] = cart_pole_l1_solver(...
   @double_cart_pole_dyn, ...
   params_true, ...
   initial_state, ...
-  sim_time);
+  sim_time, ...
+  r);
 
 %% Plot results
 x = state(:,1); theta1 = state(:,2); theta2 = state(:,3);
@@ -190,8 +198,10 @@ set(0, 'DefaultTextInterpreter', 'latex');
 set(0, 'DefaultLegendInterpreter', 'latex');
 
 % Cart position
-subplot(3,4,1); plot(t, x, 'b', t, x_hat, 'r--', 'LineWidth', 1.5);
-legend('Plant', 'Predictor'); title('Cart Position');
+subplot(3,4,1);
+r_vec = arrayfun(r, t)';
+plot(t, x, 'b', t, x_hat, 'r--', t, r_vec, 'k:', 'LineWidth', 1.5);
+legend('Plant', 'Predictor', 'Reference'); title('Cart Position');
 xlabel('t [s]'); ylabel('x [m]'); grid on;
 
 % Pole 1 angle
@@ -243,13 +253,14 @@ plot(real(eigs), imag(eigs), 'x', 'MarkerSize', 10, 'LineWidth', 2);
 title('Reference Model Poles'); xlabel('Real'); ylabel('Imag'); grid on;
 xlim([-5 5])
 
-sgtitle('Pure L1 Adaptive Control - Double Cart-Pole', 'FontSize', 16);
+sgtitle('L1 Adaptive Control - Double Cart-Pole', 'FontSize', 16);
 
 %% Performance Metrics
 fprintf('\n============= Performance Metrics =============\n');
 
 % Position tracking error
-x_error = x - 0;  % Reference is 0
+r_vec = arrayfun(r, t)';  % Evaluate reference over time (column vector)
+x_error = x - r_vec;
 rms_x = rms(x_error);
 peak_x = max(abs(x_error));
 final_x = abs(x_error(end));
