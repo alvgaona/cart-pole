@@ -30,8 +30,8 @@ g = params.g;
 
 % Mass matrix
 a11 = M+m1+m2;
-a12 = -(m1+m2)*l1*cos(theta1)
-a13 = m2*l2*cos(theta2)
+a12 = -(m1+m2)*l1*cos(theta1);
+a13 = -m2*l2*cos(theta2);
 a21 = a12;
 a22 = (m1+m2)*l1^2;
 a23 = m2*l1*l2*cos(theta1-theta2);
@@ -45,8 +45,13 @@ M = [
     a31 a32 a33
 ];
 
+cond_num = cond(M);
+if cond_num > 1e10
+    warning('Mass matrix ill-conditioned (cond=%.2e) at t=%.3f', cond_num, t);
+end
+
 % Coriolis matrix
-c12 = (m1+m2)*l1*sin(theta)*dtheta1;
+c12 = (m1+m2)*l1*sin(theta1)*dtheta1;
 c13 = m2*l2*sin(theta2)*dtheta2;
 c23 = m2*l1*l2*sin(theta1-theta2)*dtheta2;
 c32 = -m2*l1*l2*sin(theta1-theta2)*dtheta1;
@@ -58,13 +63,16 @@ C = [
 ];
 
 % Damping matrix
-D = [b*dx; 0; 0];
+D = [
+    b 0 0;
+    zeros(2,3)
+];
 
 % Input matrix
 B = [1; 0; 0];
 
 % Gravity vector
-G = [0; (m1+m2)*l1*g*sin(theta1); -m2*l2*g*sin(theta2)];
+G = [0; -(m1+m2)*l1*g*sin(theta1); -m2*l2*g*sin(theta2)];
 
 % Get control input
 u = control_func(t, state);
