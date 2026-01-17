@@ -134,8 +134,8 @@ function [t, y, x_hat, sigma] = cart_pole_l1_solver(f, params, x0, sim_time, r, 
         u_ad_raw = params.k_g * r(t(i)) - sigma_hat_m;
 
         % Discrete low-pass filter
-        a = exp(params.Ts * params.wf);
-        u_filt = (1 - a) * u_filt + a * u_ad_raw;
+        a = exp(-params.Ts * params.wf);
+        u_filt = a * u_filt + (1 - a) * u_ad_raw;
 
         % Total control to plant (baseline feedback + filtered adaptive)
         u_total = -params.K_lqr * x_hat + u_filt;
