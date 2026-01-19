@@ -131,14 +131,14 @@ function [t, y, x_hat, sigma] = cart_pole_l1_solver(f, params, x0, sim_time, r, 
         sigma_hat_um = sigma_update(2:end);
 
         % Adaptive control law (feedforward + uncertainty compensation)
-        u_ad_raw = params.k_g * r(t(i)) - sigma_hat_m;
+        u_ad = params.k_g * r(t(i)) - sigma_hat_m;
 
         % Discrete low-pass filter
         a = exp(-params.Ts * params.wf);
-        u_filt = a * u_filt + (1 - a) * u_ad_raw;
+        u_filt = a * u_filt + (1 - a) * u_ad;
 
         % Total control to plant (baseline feedback + filtered adaptive)
-        u_total = -params.K_lqr * x_hat + u_filt;
+        u_total = -params.K_lqr * x + u_filt;
 
         % Solve plant dynamics using RK4
         f_plant = @(t_val, x_val) f(t_val, x_val, params, @(t,x) u_total, dist_func);
