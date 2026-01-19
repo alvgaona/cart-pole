@@ -1,16 +1,20 @@
 # Cart-pole
 
-Cart-pole systems are great benchmarks to study control strategies.
-So in this repository, you can find nonlinear dynamics of the single inverted pendulum on a cart pole.
-The double inverted pendulum on a cart pole is also added.
-Due to the high nonlinear dynamics both system present, it is a great starting point to analyze
-control strategies like PID, LQR, and more advanced control strategies like L1 Adaptive Control.
+In this repository, you can find nonlinear dynamics of the single and double inverted pendulum on a cart.
 
 ## Controllers
-
-At the time of this writing, you can find:
 
 - LQR Controllers
 - L1 Adaptive Controllers
 
-Both control streategies have been applied to both single and double inverted pendulum systems.
+## Usage
+
+1. In the root of the repository, in MATLAB, add all three folders to the PATH.
+
+![Add folder and subfolders](./add-to-path.png)
+
+2. Then just run any LQR or L1 simulation script (e.g. `l1/double_cart_pole_l1_control.m`).
+
+## License
+
+[MIT](LICENSE)
